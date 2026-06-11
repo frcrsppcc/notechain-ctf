@@ -1,8 +1,8 @@
-import requests, sys, re, time
+import requests, sys, re, time, os
 
 APP = "http://app.ctf.local"
 API = "http://api.ctf.local"
-BOT = "http://localhost:8888"
+BOT = os.environ.get("BOT_URL", "http://localhost:8888")
 
 U = "pwner1337"
 P = "hunter2"
