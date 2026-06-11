@@ -14,9 +14,9 @@ def get_db():
 
 def init_db():
     os.makedirs(os.path.dirname(DB), exist_ok=True)
-    conn = get_db()
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript("""
+    db = get_db()
+    db.execute("PRAGMA journal_mode=WAL")
+    db.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
@@ -35,38 +35,38 @@ def init_db():
             csrf_token TEXT NOT NULL
         );
     """)
-    if not conn.execute("SELECT id FROM users WHERE username='admin'").fetchone():
-        conn.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
+    if not db.execute("SELECT id FROM users WHERE username='admin'").fetchone():
+        db.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
                      ("admin", "s3cur3_admin_p4ssw0rd_1337", "admin@notchain.ctf"))
-        uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        conn.execute("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
+        uid = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        db.execute("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
                      (uid, "Flag Note", "flag is only visible at /flag"))
-        conn.commit()
-    conn.close()
+        db.commit()
+    db.close()
 
 init_db()
 
 def get_session(token):
-    """look up session token, returns dict {username, csrf_token} or None"""
     if not token:
         return None
     conn = get_db()
-    row = conn.execute("SELECT username, csrf_token FROM sessions WHERE token=?", [token]).fetchone()
+    r = conn.execute("SELECT username, csrf_token FROM sessions WHERE token=?", [token]).fetchone()
     conn.close()
-    return dict(row) if row else None
+    if r:
+        return dict(r)
+    return None
 
 def do_login(username):
-    """create session + csrf token, return redirect response with cookies"""
-    session_token = secrets.token_hex(32)
-    csrf = secrets.token_hex(16)
+    t = secrets.token_hex(32)
+    c = secrets.token_hex(16)
     conn = get_db()
     conn.execute("INSERT INTO sessions (token, username, csrf_token) VALUES (?, ?, ?)",
-                 [session_token, username, csrf])
+                 [t, username, c])
     conn.commit()
     conn.close()
     resp = make_response(redirect("/dashboard"))
-    resp.set_cookie("session", session_token, httponly=True)
-    resp.set_cookie("csrf_token", csrf, httponly=True)
+    resp.set_cookie("session", t, httponly=True)
+    resp.set_cookie("csrf_token", c, httponly=True)
     return resp
 
 @app.route('/')
@@ -98,10 +98,10 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
         conn = get_db()
-        user = conn.execute("SELECT * FROM users WHERE username=? AND password=?",
+        u = conn.execute("SELECT * FROM users WHERE username=? AND password=?",
                            [username, password]).fetchone()
         conn.close()
-        if user:
+        if u:
             return do_login(username)
         return "wrong credentials"
     return render_template("login.html")
@@ -112,12 +112,12 @@ def dashboard():
     if not sess:
         return redirect("/login")
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", [sess["username"]]).fetchone()
-    if not user:
+    u = conn.execute("SELECT * FROM users WHERE username=?", [sess["username"]]).fetchone()
+    if not u:
         return redirect("/login")
-    notes = conn.execute("SELECT * FROM notes WHERE user_id=?", [user["id"]]).fetchall()
+    notes = conn.execute("SELECT * FROM notes WHERE user_id=?", [u["id"]]).fetchall()
     conn.close()
-    return render_template("dashboard.html", user=user, notes=notes)
+    return render_template("dashboard.html", user=u, notes=notes)
 
 @app.route('/notes/<int:note_id>')
 def view_note(note_id):
@@ -141,9 +141,9 @@ def create_note():
     if not title or not content:
         return "title and content required"
     conn = get_db()
-    user = conn.execute("SELECT id FROM users WHERE username=?", [sess["username"]]).fetchone()
+    u = conn.execute("SELECT id FROM users WHERE username=?", [sess["username"]]).fetchone()
     conn.execute("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
-                [user["id"], title, content])
+                [u["id"], title, content])
     conn.commit()
     conn.close()
     return redirect("/dashboard")
@@ -161,7 +161,6 @@ def logout():
     resp.set_cookie("csrf_token", "", max_age=0)
     return resp
 
-# ===== API — accessible via api.ctf.local =====
 @app.route('/cookie/set')
 def cookie_set():
     name = request.args.get("name")
@@ -169,11 +168,9 @@ def cookie_set():
     if not name or not value:
         return "?name=X&value=Y"
     resp = make_response("ok")
-    # set cookie for entire domain so subdomains share it
     resp.set_cookie(name, value, domain=".ctf.local")
     return resp
 
-# ===== Password change (vulnerable — GET method!) =====
 @app.route('/change-password')
 def change_password():
     sess = get_session(request.cookies.get("session"))
@@ -186,8 +183,6 @@ def change_password():
     if not new_pass or not csrf:
         return "missing password or csrf_token"
 
-    # Double-submit cookie check
-    # accept any matching token — needed for cross-subdomain sharing
     tokens = request.cookies.getlist("csrf_token")
     if csrf not in tokens:
         return "csrf token mismatch"
@@ -203,11 +198,11 @@ def flag():
     sess = get_session(request.cookies.get("session"))
     if not sess or sess["username"] != "admin":
         return "not authorized"
-    password = request.args.get("password", "")
+    pw = request.args.get("password", "")
     conn = get_db()
     row = conn.execute("SELECT password FROM users WHERE username='admin'").fetchone()
     conn.close()
-    if not row or row["password"] != password:
+    if not row or row["password"] != pw:
         return "wrong password"
     return os.environ.get("FLAG", "CTF{csrf_and_cookie_tossing_chain}")
 
