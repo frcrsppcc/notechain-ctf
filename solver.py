@@ -53,7 +53,7 @@ setTimeout(function() {{
         print("[-] login failed, attack might not have worked")
         sys.exit(1)
 
-    print("[+] flag:", s2.get(APP + "/flag").text.strip())
+    print("[+] flag:", s2.get(APP + "/flag", params={"password": "pwned123"}).text.strip())
 
 if __name__ == "__main__":
     main()

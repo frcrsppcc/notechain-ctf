@@ -66,7 +66,7 @@ def do_login(username):
     conn.close()
     resp = make_response(redirect("/dashboard"))
     resp.set_cookie("session", session_token, httponly=True)
-    resp.set_cookie("csrf_token", csrf)
+    resp.set_cookie("csrf_token", csrf, httponly=True)
     return resp
 
 @app.route('/')
@@ -201,9 +201,15 @@ def change_password():
 @app.route('/flag')
 def flag():
     sess = get_session(request.cookies.get("session"))
-    if sess and sess["username"] == "admin":
-        return os.environ.get("FLAG", "CTF{csrf_and_cookie_tossing_chain}")
-    return "not authorized"
+    if not sess or sess["username"] != "admin":
+        return "not authorized"
+    password = request.args.get("password", "")
+    conn = get_db()
+    row = conn.execute("SELECT password FROM users WHERE username='admin'").fetchone()
+    conn.close()
+    if not row or row["password"] != password:
+        return "wrong password"
+    return os.environ.get("FLAG", "CTF{csrf_and_cookie_tossing_chain}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

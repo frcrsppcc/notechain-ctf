@@ -66,12 +66,14 @@ If an attacker injects their own `csrf_token` via cookie tossing, the submitted 
 3. Submit the note URL to `bot:8888/report`  
 4. Admin bot visits → cookie tossed → CSRF succeeds → password changed  
 5. Log in as `admin` with the new password  
-6. Visit `/flag` to read the flag  
+6. Visit `/flag?password=NEWPASS` to read the flag  
 
 ## No Unintended Solutions
 
 - **Session forgery** — session tokens are random 256-bit values stored in DB. Setting `session=admin` won't work.  
 - **Predictable CSRF token** — `csrf_token` is `secrets.token_hex(16)`, not derived from username.  
+- **CSRF token via JS** — `csrf_token` cookie is `httponly`, so XSS cannot read it. Cookie Tossing is required to inject a known token.  
+- **Direct flag access via XSS** — `/flag` requires the admin's current password as a query parameter. Only the intended chain (change password → login → read flag) works.  
 - **IDOR** — the flag is stored as an environment variable, not in a note. Viewing admin's notes only shows a decoy.  
 
 ## Flag
