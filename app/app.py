@@ -115,7 +115,7 @@ def dashboard():
     u = conn.execute("SELECT * FROM users WHERE username=?", [sess["username"]]).fetchone()
     if not u:
         return redirect("/login")
-    notes = conn.execute("SELECT * FROM notes WHERE user_id=?", [u["id"]]).fetchall()
+    notes = conn.execute("SELECT * FROM notes WHERE user_id=? ORDER BY id DESC", [u["id"]]).fetchall()
     conn.close()
     return render_template("dashboard.html", user=u, notes=notes)
 

