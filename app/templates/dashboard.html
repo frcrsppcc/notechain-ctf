@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - NoteChain</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: monospace; max-width: 700px; margin: 30px auto; padding: 20px; background: #0d1117; color: #c9d1d9; }
+        input, textarea { width: 100%; padding: 8px; margin: 5px 0; background: #161b22; border: 1px solid #30363d; color: #c9d1d9; }
+        button { padding: 8px 20px; background: #238636; border: none; color: #fff; cursor: pointer; }
+        a { color: #58a6ff; }
+        .note { border: 1px solid #30363d; padding: 12px; margin: 10px 0; background: #161b22; border-radius: 6px; }
+        .note h3 { margin: 0 0 8px 0; color: #f0f6fc; }
+        .note a { font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <h2>dashboard</h2>
+    <p>logged in as <strong>{{ user.username }}</strong> | <a href="/logout">logout</a></p>
+
+    <h3>create note</h3>
+    <form method="POST" action="/create">
+        <p><input type="text" name="title" placeholder="note title"></p>
+        <p><textarea name="content" rows="5" placeholder="note content (html allowed)"></textarea></p>
+        <p><button type="submit">create</button></p>
+    </form>
+
+    <h3>your notes</h3>
+    {% if notes %}
+        {% for note in notes %}
+        <div class="note">
+            <h3>{{ note.title }}</h3>
+            <p><a href="/notes/{{ note.id }}">view →</a></p>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>no notes yet.</p>
+    {% endif %}
+</body>
+</html>
