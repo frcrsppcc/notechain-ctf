@@ -1,7 +1,7 @@
 import os
-import hashlib
+import secrets
 import sqlite3
-from flask import Flask, render_template, request, redirect, url_for, make_response
+from flask import Flask, render_template, request, redirect, make_response
 
 app = Flask(__name__)
 
@@ -29,20 +29,45 @@ def init_db():
             title TEXT NOT NULL,
             content TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            csrf_token TEXT NOT NULL
+        );
     """)
     if not conn.execute("SELECT id FROM users WHERE username='admin'").fetchone():
-        flag = os.environ.get("FLAG", "CTF{csrf_and_cookie_tossing_chain}")
-        if os.path.exists("/app/flag.txt"):
-            flag = open("/app/flag.txt").read().strip()
         conn.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
                      ("admin", "s3cur3_admin_p4ssw0rd_1337", "admin@notchain.ctf"))
         uid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.execute("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
-                     (uid, "Flag Note", flag))
+                     (uid, "Flag Note", "flag is only visible at /flag"))
         conn.commit()
     conn.close()
 
 init_db()
+
+def get_session(token):
+    """look up session token, returns dict {username, csrf_token} or None"""
+    if not token:
+        return None
+    conn = get_db()
+    row = conn.execute("SELECT username, csrf_token FROM sessions WHERE token=?", [token]).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def do_login(username):
+    """create session + csrf token, return redirect response with cookies"""
+    session_token = secrets.token_hex(32)
+    csrf = secrets.token_hex(16)
+    conn = get_db()
+    conn.execute("INSERT INTO sessions (token, username, csrf_token) VALUES (?, ?, ?)",
+                 [session_token, username, csrf])
+    conn.commit()
+    conn.close()
+    resp = make_response(redirect("/dashboard"))
+    resp.set_cookie("session", session_token, httponly=True)
+    resp.set_cookie("csrf_token", csrf)
+    return resp
 
 @app.route('/')
 def index():
@@ -60,15 +85,11 @@ def register():
             conn.execute("INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
                         [username, password, username + "@notchain.ctf"])
             conn.commit()
-            resp = make_response(redirect("/dashboard"))
-            resp.set_cookie("session", username, httponly=True)
-            token = hashlib.md5((username + "notchain-salt").encode()).hexdigest()
-            resp.set_cookie("csrf_token", token)
-            return resp
-        except sqlite3.IntegrityError:
-            return "username taken"
-        finally:
             conn.close()
+            return do_login(username)
+        except sqlite3.IntegrityError:
+            conn.close()
+            return "username taken"
     return render_template("register.html")
 
 @app.route('/login', methods=["GET", "POST"])
@@ -81,21 +102,17 @@ def login():
                            [username, password]).fetchone()
         conn.close()
         if user:
-            resp = make_response(redirect("/dashboard"))
-            resp.set_cookie("session", username, httponly=True)
-            token = hashlib.md5((username + "notchain-salt").encode()).hexdigest()
-            resp.set_cookie("csrf_token", token)
-            return resp
+            return do_login(username)
         return "wrong credentials"
     return render_template("login.html")
 
 @app.route('/dashboard')
 def dashboard():
-    username = request.cookies.get("session")
-    if not username:
+    sess = get_session(request.cookies.get("session"))
+    if not sess:
         return redirect("/login")
     conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE username=?", [username]).fetchone()
+    user = conn.execute("SELECT * FROM users WHERE username=?", [sess["username"]]).fetchone()
     if not user:
         return redirect("/login")
     notes = conn.execute("SELECT * FROM notes WHERE user_id=?", [user["id"]]).fetchall()
@@ -104,8 +121,8 @@ def dashboard():
 
 @app.route('/notes/<int:note_id>')
 def view_note(note_id):
-    username = request.cookies.get("session")
-    if not username:
+    sess = get_session(request.cookies.get("session"))
+    if not sess:
         return redirect("/login")
     conn = get_db()
     note = conn.execute("SELECT * FROM notes WHERE id=?", [note_id]).fetchone()
@@ -116,15 +133,15 @@ def view_note(note_id):
 
 @app.route('/create', methods=["POST"])
 def create_note():
-    username = request.cookies.get("session")
-    if not username:
+    sess = get_session(request.cookies.get("session"))
+    if not sess:
         return redirect("/login")
     title = request.form.get("title", "").strip()
     content = request.form.get("content", "").strip()
     if not title or not content:
         return "title and content required"
     conn = get_db()
-    user = conn.execute("SELECT id FROM users WHERE username=?", [username]).fetchone()
+    user = conn.execute("SELECT id FROM users WHERE username=?", [sess["username"]]).fetchone()
     conn.execute("INSERT INTO notes (user_id, title, content) VALUES (?, ?, ?)",
                 [user["id"], title, content])
     conn.commit()
@@ -133,6 +150,12 @@ def create_note():
 
 @app.route('/logout')
 def logout():
+    token = request.cookies.get("session")
+    if token:
+        conn = get_db()
+        conn.execute("DELETE FROM sessions WHERE token=?", [token])
+        conn.commit()
+        conn.close()
     resp = make_response(redirect("/"))
     resp.set_cookie("session", "", max_age=0)
     resp.set_cookie("csrf_token", "", max_age=0)
@@ -153,8 +176,8 @@ def cookie_set():
 # ===== Password change (vulnerable — GET method!) =====
 @app.route('/change-password')
 def change_password():
-    username = request.cookies.get("session")
-    if not username:
+    sess = get_session(request.cookies.get("session"))
+    if not sess:
         return redirect("/login")
 
     new_pass = request.args.get("password")
@@ -170,23 +193,16 @@ def change_password():
         return "csrf token mismatch"
 
     conn = get_db()
-    conn.execute("UPDATE users SET password=? WHERE username=?", [new_pass, username])
+    conn.execute("UPDATE users SET password=? WHERE username=?", [new_pass, sess["username"]])
     conn.commit()
     conn.close()
     return "password changed!"
 
 @app.route('/flag')
 def flag():
-    username = request.cookies.get("session")
-    if username == "admin":
-        conn = get_db()
-        note = conn.execute(
-            "SELECT content FROM notes WHERE user_id=(SELECT id FROM users WHERE username='admin') AND title='Flag Note'"
-        ).fetchone()
-        conn.close()
-        if note:
-            return note[0]
-        return "no flag note found"
+    sess = get_session(request.cookies.get("session"))
+    if sess and sess["username"] == "admin":
+        return os.environ.get("FLAG", "CTF{csrf_and_cookie_tossing_chain}")
     return "not authorized"
 
 if __name__ == "__main__":
