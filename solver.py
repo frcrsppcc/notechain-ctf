@@ -1,6 +1,6 @@
 import requests, sys, re, time, os
 
-APP = "http://localhost:5000"
+APP = "http://localhost:7777"
 BOT = os.environ.get("BOT_URL", "http://localhost:8888")
 
 U = "pwner1337"

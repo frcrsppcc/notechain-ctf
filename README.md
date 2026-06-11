@@ -19,13 +19,13 @@ docker compose up --build
 ```
 
 Two services:
-- `app` — Flask app on port 5000  
+- `app` — Flask app on port 7777  
 - `bot` — admin bot on port 8888 (`POST /report` with `url=<exploit>`)
 
 ### 2. Open the app
 
 ```
-http://localhost:5000
+http://localhost:7777
 ```
 
 ## Vulnerability
@@ -60,7 +60,7 @@ If an attacker injects their own `csrf_token` via cookie tossing, the submitted 
 ### Running the Solver
 
 ```bash
-# From host (app on localhost:5000, bot on localhost:8888)
+# From host (app on localhost:7777, bot on localhost:8888)
 pip install requests
 python solver.py
 

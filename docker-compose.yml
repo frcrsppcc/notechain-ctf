@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.app
     ports:
-      - "5000:5000"
+      - "7777:5000"
     environment:
       - FLAG=CTF{cs1rf_c00k1e_t0ss1ng_ftw}
 
