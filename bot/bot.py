@@ -4,7 +4,7 @@ import os, threading
 
 app = Flask(__name__)
 
-APP_URL = os.environ.get("APP_URL", "http://app.ctf.local")
+APP_URL = os.environ.get("APP_URL", "http://app:5000")
 
 @app.route('/report', methods=['POST'])
 def report():

