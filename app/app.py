@@ -57,16 +57,16 @@ def get_session(token):
     return None
 
 def do_login(username):
-    tok = secrets.token_hex(32)
-    cs = secrets.token_hex(16)
+    session_token = secrets.token_hex(32)
+    csrf = secrets.token_hex(16)
     conn = get_db()
     conn.execute("INSERT INTO sessions (token, username, csrf_token) VALUES (?, ?, ?)",
-                 [tok, username, cs])
+                 [session_token, username, csrf])
     conn.commit()
     conn.close()
     resp = make_response(redirect("/dashboard"))
-    resp.set_cookie("session", tok, httponly=True)
-    resp.set_cookie("csrf_token", cs, httponly=True)
+    resp.set_cookie("session", session_token, httponly=True)
+    resp.set_cookie("csrf_token", csrf, httponly=True)
     return resp
 
 @app.route('/')
